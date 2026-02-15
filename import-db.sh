@@ -22,7 +22,10 @@ echo "✓ Databases created"
 # Import Realm database
 echo "[2/5] Importing Realmd database..."
 if [ -f /opt/mangos-db/Realm/Setup/realmdCreateDB.sql ]; then
-    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" realmd < /opt/mangos-db/Realm/Setup/realmdCreateDB.sql
+    # Skip CREATE DATABASE line since we already created it
+    grep -v "^CREATE DATABASE" /opt/mangos-db/Realm/Setup/realmdCreateDB.sql | \
+    grep -v "^USE " | \
+    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" realmd
     echo "  ✓ Realmd structure created"
     
     if [ -f /opt/mangos-db/Realm/Setup/realmdLoadDB.sql ]; then
@@ -36,7 +39,10 @@ fi
 # Import World database (takes 5-15 minutes)
 echo "[3/5] Importing World database (this may take 5-15 minutes)..."
 if [ -f /opt/mangos-db/World/Setup/mangosdCreateDB.sql ]; then
-    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" mangos < /opt/mangos-db/World/Setup/mangosdCreateDB.sql
+    # Skip CREATE DATABASE line
+    grep -v "^CREATE DATABASE" /opt/mangos-db/World/Setup/mangosdCreateDB.sql | \
+    grep -v "^USE " | \
+    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" mangos
     echo "  ✓ World structure created"
 fi
 
@@ -47,6 +53,10 @@ if [ -d /opt/mangos-db/World/Setup/FullDB ]; then
         if [ -f "$sql_file" ]; then
             mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" mangos < "$sql_file"
             file_count=$((file_count + 1))
+            # Progress indicator every 10 files
+            if [ $((file_count % 10)) -eq 0 ]; then
+                echo "    Imported $file_count files..."
+            fi
         fi
     done
     echo "  ✓ World data imported ($file_count files)"
@@ -55,7 +65,10 @@ fi
 # Import Characters database
 echo "[4/5] Importing Characters database..."
 if [ -f /opt/mangos-db/Character/Setup/characterCreateDB.sql ]; then
-    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" characters < /opt/mangos-db/Character/Setup/characterCreateDB.sql
+    # Skip CREATE DATABASE line
+    grep -v "^CREATE DATABASE" /opt/mangos-db/Character/Setup/characterCreateDB.sql | \
+    grep -v "^USE " | \
+    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" characters
     echo "  ✓ Characters structure created"
 fi
 
@@ -98,12 +111,6 @@ WHERE table_schema IN ('realmd', 'mangos', 'characters')
 GROUP BY table_schema 
 ORDER BY table_schema;
 "
-
-echo ""
-echo "Database versions:"
-mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" realmd -e "SELECT * FROM db_version LIMIT 1;" 2>/dev/null || echo "  Realmd: No version table"
-mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" mangos -e "SELECT * FROM db_version LIMIT 1;" 2>/dev/null || echo "  Mangos: No version table"
-mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" characters -e "SELECT * FROM db_version LIMIT 1;" 2>/dev/null || echo "  Characters: No version table"
 
 # Cleanup
 echo ""
