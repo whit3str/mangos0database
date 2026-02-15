@@ -23,8 +23,8 @@ echo "✓ Databases created"
 echo "[2/5] Importing Realmd database..."
 if [ -f /opt/mangos-db/Realm/Setup/realmdCreateDB.sql ]; then
     # Filter out problematic SQL commands
-    grep -vE "^(CREATE DATABASE|CREATE USER|GRANT|USE |DROP USER)" /opt/mangos-db/Realm/Setup/realmdCreateDB.sql | \
-    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" realmd 2>&1 | grep -v "Warning" || true
+    grep -vE "^(CREATE DATABASE|CREATE USER|GRANT|USE |DROP USER|FLUSH PRIVILEGES)" /opt/mangos-db/Realm/Setup/realmdCreateDB.sql | \
+    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" realmd 2>&1 | grep -vE "Warning|ERROR 1227" || true
     echo "  ✓ Realmd structure created"
     
     if [ -f /opt/mangos-db/Realm/Setup/realmdLoadDB.sql ]; then
@@ -39,12 +39,16 @@ fi
 echo "[3/5] Importing World database (this may take 5-15 minutes)..."
 if [ -f /opt/mangos-db/World/Setup/mangosdCreateDB.sql ]; then
     # Filter out problematic SQL commands
-    grep -vE "^(CREATE DATABASE|CREATE USER|GRANT|USE |DROP USER)" /opt/mangos-db/World/Setup/mangosdCreateDB.sql | \
-    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" mangos 2>&1 | grep -v "Warning" || true
+    grep -vE "^(CREATE DATABASE|CREATE USER|GRANT|USE |DROP USER|FLUSH PRIVILEGES)" /opt/mangos-db/World/Setup/mangosdCreateDB.sql | \
+    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" mangos 2>&1 | grep -vE "Warning|ERROR 1227" || true
     echo "  ✓ World structure created"
 fi
 
-if [ -d /opt/mangos-db/World/Setup/FullDB ]; then
+# Verify tables were created before importing data
+TABLE_COUNT=$(mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='mangos';" -sN)
+echo "  Found $TABLE_COUNT tables in mangos database"
+
+if [ "$TABLE_COUNT" -gt 0 ] && [ -d /opt/mangos-db/World/Setup/FullDB ]; then
     echo "  Importing World data (125+ tables)..."
     file_count=0
     for sql_file in /opt/mangos-db/World/Setup/FullDB/*.sql; do
@@ -58,14 +62,16 @@ if [ -d /opt/mangos-db/World/Setup/FullDB ]; then
         fi
     done
     echo "  ✓ World data imported ($file_count files)"
+else
+    echo "  ⚠ World tables not created - skipping data import"
 fi
 
 # Import Characters database
 echo "[4/5] Importing Characters database..."
 if [ -f /opt/mangos-db/Character/Setup/characterCreateDB.sql ]; then
     # Filter out problematic SQL commands
-    grep -vE "^(CREATE DATABASE|CREATE USER|GRANT|USE |DROP USER)" /opt/mangos-db/Character/Setup/characterCreateDB.sql | \
-    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" characters 2>&1 | grep -v "Warning" || true
+    grep -vE "^(CREATE DATABASE|CREATE USER|GRANT|USE |DROP USER|FLUSH PRIVILEGES)" /opt/mangos-db/Character/Setup/characterCreateDB.sql | \
+    mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" characters 2>&1 | grep -vE "Warning|ERROR 1227" || true
     echo "  ✓ Characters structure created"
 fi
 
@@ -92,41 +98,4 @@ echo ""
 echo "Configuring default realm..."
 mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" realmd <<-EOSQL 2>/dev/null || true
     DELETE FROM realmlist WHERE id = 1;
-    INSERT INTO realmlist (id, name, address, port, icon, realmflags, timezone, allowedSecurityLevel, population, realmbuilds)
-    VALUES (1, 'MangosZero', 'mangoszero-server', 8085, 0, 0, 1, 0, 0, '5875');
-EOSQL
-
-# Display final summary
-echo ""
-echo "=========================================="
-echo "Database Import Summary"
-echo "=========================================="
-mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "
-SELECT table_schema as 'Database', COUNT(*) as 'Tables' 
-FROM information_schema.tables 
-WHERE table_schema IN ('realmd', 'mangos', 'characters') 
-GROUP BY table_schema 
-ORDER BY table_schema;
-" 2>/dev/null || echo "Could not generate summary"
-
-echo ""
-echo "Sample data check:"
-mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "
-SELECT 'Realmd accounts' as Info, COUNT(*) as Count FROM realmd.account
-UNION ALL
-SELECT 'World creatures', COUNT(*) FROM mangos.creature
-UNION ALL
-SELECT 'World quests', COUNT(*) FROM mangos.quest_template
-UNION ALL
-SELECT 'Characters', COUNT(*) FROM characters.characters;
-" 2>/dev/null || echo "Could not check sample data"
-
-# Cleanup
-echo ""
-echo "Cleaning up..."
-rm -rf /opt/mangos-db 2>/dev/null || true
-
-echo ""
-echo "=========================================="
-echo "✓ Database import completed successfully!"
-echo "====================================
+    INSERT INTO realmlist (id, name, address, port, icon, realmflags, timezone, allowedSecurityLevel, population
