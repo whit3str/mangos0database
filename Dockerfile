@@ -16,7 +16,7 @@ RUN apt-get update && \
         git \
         ca-certificates && \
     git clone --depth 1 https://github.com/mangoszero/database.git /opt/mangos-db && \
-    apt-get purge -y git && \
+    apt-get purge -y git ca-certificates && \
     apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -24,6 +24,9 @@ RUN apt-get update && \
 # Copy database import script
 COPY import-db.sh /docker-entrypoint-initdb.d/01-import-mangos.sh
 RUN chmod +x /docker-entrypoint-initdb.d/01-import-mangos.sh
+
+# NE PAS supprimer /opt/mangos-db ici !
+# Le script d'import en aura besoin et le supprimera lui-même
 
 # Expose MySQL port
 EXPOSE 3306
