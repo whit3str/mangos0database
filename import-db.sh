@@ -98,4 +98,35 @@ echo ""
 echo "Configuring default realm..."
 mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" realmd <<-EOSQL 2>/dev/null || true
     DELETE FROM realmlist WHERE id = 1;
-    INSERT INTO realmlist (id, name, address, port, icon, realmflags, timezone, allowedSecurityLevel, population
+    INSERT INTO realmlist (id, name, address, port, icon, realmflags, timezone, allowedSecurityLevel, population, realmbuilds)
+    VALUES (1, 'MangosZero', 'mangoszero-server', 8085, 0, 0, 1, 0, 0, '5875');
+EOSQL
+
+# Display final summary
+echo ""
+echo "=========================================="
+echo "Database Import Summary"
+echo "=========================================="
+mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "
+SELECT table_schema as 'Database', COUNT(*) as 'Tables' 
+FROM information_schema.tables 
+WHERE table_schema IN ('realmd', 'mangos', 'characters') 
+GROUP BY table_schema 
+ORDER BY table_schema;" 2>/dev/null || echo "Could not generate summary"
+
+echo ""
+echo "Sample data check:"
+mysql -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "
+SELECT 'World creatures' as Info, COUNT(*) as Count FROM mangos.creature
+UNION ALL
+SELECT 'World quests', COUNT(*) FROM mangos.quest_template;" 2>/dev/null || echo "Could not check sample data"
+
+# Cleanup
+echo ""
+echo "Cleaning up..."
+rm -rf /opt/mangos-db 2>/dev/null || true
+
+echo ""
+echo "=========================================="
+echo "✓ Database import completed successfully!"
+echo "=========================================="
